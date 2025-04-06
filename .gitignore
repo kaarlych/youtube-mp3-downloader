@@ -1,0 +1,14 @@
+# Python bytecode files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Virtual environment folder
+.venv/
+
+# IDE-specific files
+.idea/
+
+# Mac system files
+.DS_Store
