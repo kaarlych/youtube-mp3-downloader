@@ -1,13 +1,22 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog, ttk
-import subprocess
+from tkinter import filedialog, messagebox, ttk
+from yt_dlp import YoutubeDL
 import threading
 import os
 
 # Globals
 download_path = os.getcwd()
 
-# Choose folder callback
+# GUI setup first
+root = tk.Tk()
+root.title("YouTube to MP3 Downloader")
+root.geometry("500x260")
+
+# Then safe to declare tkinter variables
+current_filename = tk.StringVar(value="")
+progress_value = tk.DoubleVar(value=0)
+
+# Folder picker
 def choose_folder():
     global download_path
     folder = filedialog.askdirectory()
@@ -15,58 +24,75 @@ def choose_folder():
         download_path = folder
         folder_label.config(text=f"Download folder: {download_path}")
 
-# Download thread wrapper
+# Update from progress hook
+def progress_hook(d):
+    if d['status'] == 'downloading':
+        percent = d.get('_percent_str', '0.0%').strip()
+        filename = d.get('filename', '')
+        try:
+            progress_value.set(float(percent.strip('%')))
+        except:
+            progress_value.set(0)
+        current_filename.set(f"Downloading: {os.path.basename(filename)} - {percent}")
+    elif d['status'] == 'finished':
+        current_filename.set("Download complete. Converting to MP3...")
+    elif d['status'] == 'error':
+        current_filename.set("Error during download.")
+
+# Download wrapper
 def start_download():
     url = entry.get().strip()
     if not url:
         messagebox.showwarning("Input Error", "Please enter a YouTube URL.")
         return
-    progress_bar.start()
     download_button.config(state="disabled")
+    progress_value.set(0)
+    current_filename.set("Starting download...")
     threading.Thread(target=download_mp3, args=(url,), daemon=True).start()
 
-# Actual download function
+# Download function using yt_dlp as module
 def download_mp3(url):
     try:
-        result = subprocess.run([
-            "yt-dlp",
-            "-x", "--audio-format", "mp3",
-            "-o", os.path.join(download_path, "%(title)s.%(ext)s"),
-            url
-        ], capture_output=True, text=True)
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'progress_hooks': [progress_hook],
+            'quiet': True,
+            'no_warnings': True,
+        }
 
-        progress_bar.stop()
-        download_button.config(state="normal")
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
-        if result.returncode == 0:
-            messagebox.showinfo("Success", "MP3 downloaded successfully!")
-        else:
-            messagebox.showerror("Download Failed", result.stderr)
+        messagebox.showinfo("Success", "MP3 downloaded successfully!")
 
     except Exception as e:
-        progress_bar.stop()
-        download_button.config(state="normal")
         messagebox.showerror("Error", str(e))
+    finally:
+        download_button.config(state="normal")
+        current_filename.set("")
 
-# GUI setup
-root = tk.Tk()
-root.title("YouTube to MP3 Downloader")
-root.geometry("500x220")
 
 tk.Label(root, text="Paste YouTube link:").pack(pady=10)
 entry = tk.Entry(root, width=60)
 entry.pack()
 
-folder_btn = tk.Button(root, text="Choose Download Folder", command=choose_folder)
-folder_btn.pack(pady=5)
-
+tk.Button(root, text="Choose Download Folder", command=choose_folder).pack(pady=5)
 folder_label = tk.Label(root, text=f"Download folder: {download_path}", wraplength=480)
-folder_label.pack(pady=2)
+folder_label.pack()
 
 download_button = tk.Button(root, text="Download MP3", command=start_download)
 download_button.pack(pady=10)
 
-progress_bar = ttk.Progressbar(root, mode='indeterminate', length=300)
+progress_bar = ttk.Progressbar(root, orient="horizontal", length=400, mode="determinate", variable=progress_value)
 progress_bar.pack(pady=5)
+
+progress_label = tk.Label(root, textvariable=current_filename, wraplength=480)
+progress_label.pack(pady=5)
 
 root.mainloop()
