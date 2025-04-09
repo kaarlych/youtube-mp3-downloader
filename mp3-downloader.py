@@ -56,14 +56,24 @@ def download_mp3(url):
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': os.path.join(download_path, '%(title)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
+            'postprocessors': [
+                {
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                },
+                {
+                    'key': 'EmbedThumbnail',
+                },
+                {
+                    'key': 'FFmpegMetadata',
+                },
+            ],
+            'writethumbnail': True,
             'progress_hooks': [progress_hook],
             'quiet': True,
             'no_warnings': True,
+            'prefer_ffmpeg': True,
         }
 
         with YoutubeDL(ydl_opts) as ydl:
