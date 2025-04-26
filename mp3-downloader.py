@@ -13,8 +13,8 @@ download_path = os.getcwd()
 # GUI setup first
 root = tk.Tk()
 root.title("YouTube to MP3 Downloader")
-root.geometry("550x360")  # Slightly taller to accommodate the repositioned elements
-root.configure(bg="#f0f0f0")  # Light gray background
+root.geometry("550x360")
+root.configure(bg="#f0f0f0")
 
 # Style configuration
 style = ttk.Style()
@@ -37,6 +37,12 @@ current_filename = tk.StringVar(value="")
 progress_value = tk.DoubleVar(value=0)
 download_speed = tk.StringVar(value="")
 estimated_time = tk.StringVar(value="")
+download_in_progress = False
+
+# Create a global reference to the download and cancel buttons
+# We'll define these properly later
+download_btn = None
+cancel_btn = None
 
 
 # Color transition effect for progress bar
@@ -56,7 +62,7 @@ def update_progress_color():
         progress_detail.config(text=progress_text)
 
     # Continue animation if download in progress
-    if progress_value.get() > 0 and progress_value.get() < 100:
+    if download_in_progress:
         root.after(100, update_progress_color)
 
 
@@ -66,7 +72,7 @@ def start_progress_animation():
 
     # Add pulsing effect to labels
     def pulse_effect():
-        if progress_value.get() > 0 and progress_value.get() < 100:
+        if download_in_progress:
             # Make labels pulse slightly
             current_size = random.uniform(9.8, 10.2)
             progress_label.config(font=('Arial', int(current_size)))
@@ -84,7 +90,7 @@ def choose_folder():
         folder_label.config(text=f"Download folder: {download_path}")
 
 
-# Update from progress hook - fixed to handle UI updates properly
+# Update from progress hook
 def progress_hook(d):
     def update_ui():
         if d['status'] == 'downloading':
@@ -131,49 +137,36 @@ def progress_hook(d):
     root.after(10, update_ui)
 
 
-# Create fancy download button with hover effect
-def create_fancy_button(parent, text, command):
-    btn_frame = tk.Frame(parent, bg="#f0f0f0")
-
-    # Create a canvas for the button with a gradient background
-    canvas = tk.Canvas(btn_frame, width=150, height=40, bg="#f0f0f0",
-                       highlightthickness=0)
-    canvas.pack()
-
-    # Draw a rounded rectangle button
-    button_id = canvas.create_rectangle(0, 0, 150, 40, fill="#4287f5", outline="",
-                                        width=0, stipple="", tags="rect")
-    canvas.create_text(75, 20, text=text, fill="white", font=('Arial', 11, 'bold'))
-
-    # Add hover effects
-    def on_enter(e):
-        canvas.itemconfig(button_id, fill="#2a6dd7")
-
-    def on_leave(e):
-        canvas.itemconfig(button_id, fill="#4287f5")
-
-    def on_click(e):
-        # Button press animation
-        canvas.itemconfig(button_id, fill="#1c4d9a")
-        parent.after(100, lambda: canvas.itemconfig(button_id, fill="#2a6dd7"))
-        command()
-
-    canvas.tag_bind("rect", "<Enter>", on_enter)
-    canvas.tag_bind("rect", "<Leave>", on_leave)
-    canvas.tag_bind("rect", "<Button-1>", on_click)
-
-    return btn_frame
+# Standard button (simpler implementation)
+def create_button(parent, text, command, bg_color="#4287f5"):
+    button = tk.Button(
+        parent,
+        text=text,
+        command=command,
+        bg=bg_color,
+        fg="white",
+        font=("Arial", 11, "bold"),
+        relief="flat",
+        padx=20,
+        pady=8,
+        activebackground="#2a6dd7",
+        activeforeground="white",
+        bd=0
+    )
+    return button
 
 
 # Download wrapper
 def start_download():
+    global download_in_progress
     url = entry.get().strip()
     if not url:
         messagebox.showwarning("Input Error", "Please enter a YouTube URL.")
         return
 
-    download_button_frame.pack_forget()
-    cancel_button_frame.pack(pady=10)
+    download_in_progress = True
+    download_btn.pack_forget()  # Hide download button
+    cancel_btn.pack(pady=10)  # Show cancel button
 
     progress_value.set(0)
     current_filename.set("Starting download...")
@@ -188,17 +181,21 @@ def start_download():
 
 # Cancel download functionality
 def cancel_download():
-    # Add your cancel logic here
+    global download_in_progress
+    download_in_progress = False
     current_filename.set("Download cancelled.")
     progress_value.set(0)
+    download_speed.set("")
+    estimated_time.set("")
 
     # Reset UI
-    cancel_button_frame.pack_forget()
-    download_button_frame.pack(pady=10)
+    cancel_btn.pack_forget()
+    download_btn.pack(pady=10)
 
 
 # Download function using yt_dlp as module
 def download_mp3(url):
+    global download_in_progress
     try:
         ydl_opts = {
             'format': 'bestaudio/best',
@@ -226,26 +223,49 @@ def download_mp3(url):
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # Use after() to schedule UI updates from the background thread
-        root.after(0, lambda: messagebox.showinfo("Success", "MP3 downloaded successfully!"))
-        root.after(0, lambda: current_filename.set("Download completed!"))
+        # Define completion function
+        def complete_download():
+            global download_in_progress
+            download_in_progress = False
+            current_filename.set("Download completed! Ready for next download.")
 
-        # Reset UI
-        root.after(0, lambda: cancel_button_frame.pack_forget())
-        root.after(0, lambda: download_button_frame.pack(pady=10))
-        root.after(0, lambda: download_speed.set(""))
-        root.after(0, lambda: estimated_time.set(""))
+            # Force the cancel button to hide and download button to show
+            if cancel_btn.winfo_ismapped():
+                cancel_btn.pack_forget()
+
+            if not download_btn.winfo_ismapped():
+                download_btn.pack(pady=10)
+
+            # Clear download stats
+            download_speed.set("")
+            estimated_time.set("")
+
+            # Debug message to console (won't be visible to users)
+            print("Download complete, button should be visible now")
+
+        # Schedule UI updates on the main thread
+        root.after(0, complete_download)
 
     except Exception as e:
-        # Schedule error handling on the main thread
-        root.after(0, lambda: messagebox.showerror("Error", str(e)))
-        root.after(0, lambda: current_filename.set(""))
+        # Error handling function
+        def handle_error():
+            global download_in_progress
+            download_in_progress = False
+            messagebox.showerror("Error", str(e))
+            current_filename.set("Download error")
 
-        # Reset UI
-        root.after(0, lambda: cancel_button_frame.pack_forget())
-        root.after(0, lambda: download_button_frame.pack(pady=10))
-        root.after(0, lambda: download_speed.set(""))
-        root.after(0, lambda: estimated_time.set(""))
+            # Force the cancel button to hide and download button to show
+            if cancel_btn.winfo_ismapped():
+                cancel_btn.pack_forget()
+
+            if not download_btn.winfo_ismapped():
+                download_btn.pack(pady=10)
+
+            # Clear download stats
+            download_speed.set("")
+            estimated_time.set("")
+
+        root.after(0, handle_error)
 
 
 # Create gradient title
@@ -266,13 +286,12 @@ entry_label = tk.Label(entry_frame, text="Paste YouTube link:",
                        fg="#555", bg="#f0f0f0")
 entry_label.pack(anchor="w")
 
-# Changed to white background with BLACK TEXT for the entry field
 entry = tk.Entry(entry_frame, width=60, font=("Arial", 10),
                  bd=0, highlightthickness=1, highlightbackground="#ccc",
-                 bg="white", fg="black")  # Added fg="black" to make text visible
+                 bg="white", fg="black")
 entry.pack(pady=5, ipady=8)
 
-# Download folder section - modified layout
+# Download folder section
 folder_frame = tk.Frame(root, bg="#f0f0f0")
 folder_frame.pack(pady=5)
 
@@ -281,21 +300,23 @@ folder_button = tk.Button(folder_frame, text="Choose Download Folder",
                           bg="#e0e0e0", fg="#333",
                           relief="flat", padx=10, pady=5,
                           font=("Arial", 9))
-folder_button.pack(pady=5)  # Changed to vertical layout
+folder_button.pack(pady=5)
 
-# Moved folder label below the button
 folder_label = tk.Label(folder_frame, text=f"Download folder: {download_path}",
                         wraplength=500, font=("Arial", 9),
                         fg="#555", bg="#f0f0f0")
-folder_label.pack(pady=3)  # Now below the button
+folder_label.pack(pady=3)
 
-# Buttons
-download_button_frame = create_fancy_button(root, "Download MP3", start_download)
-download_button_frame.pack(pady=10)
+# Create buttons container frame (helps with button management)
+buttons_frame = tk.Frame(root, bg="#f0f0f0")
+buttons_frame.pack(pady=10)
 
-cancel_button_frame = create_fancy_button(root, "Cancel Download", cancel_download)
-# Initially hidden
-cancel_button_frame.pack_forget()
+# Create the buttons with simpler implementation
+download_btn = create_button(buttons_frame, "Download MP3", start_download, "#4287f5")
+download_btn.pack(pady=10)
+
+cancel_btn = create_button(buttons_frame, "Cancel Download", cancel_download, "#e74c3c")
+cancel_btn.pack_forget()  # Initially hidden
 
 # Progress section
 progress_frame = tk.Frame(root, bg="#f0f0f0")
