@@ -14,7 +14,7 @@ download_path = os.getcwd()
 root = tk.Tk()
 root.title("YouTube to MP3 Downloader")
 root.geometry("550x360")
-root.configure(bg="#f0f0f0")
+root.configure(bg="#f5f5f7")  # Light Apple-style background
 
 # Style configuration
 style = ttk.Style()
@@ -40,7 +40,6 @@ estimated_time = tk.StringVar(value="")
 download_in_progress = False
 
 # Create a global reference to the download and cancel buttons
-# We'll define these properly later
 download_btn = None
 cancel_btn = None
 
@@ -137,21 +136,90 @@ def progress_hook(d):
     root.after(10, update_ui)
 
 
-# Standard button (simpler implementation)
-def create_button(parent, text, command, bg_color="#4287f5"):
+# Modern button with rounded corners
+def create_modern_button(parent, text, command, primary=True):
+    if primary:
+        bg_color = "#1a73e8"  # Google blue
+        hover_color = "#0d62cb"
+    else:
+        bg_color = "#f44336"  # Material red
+        hover_color = "#d32f2f"
+
+    # Create a canvas-based button with rounded corners
+    button_frame = tk.Frame(parent, bg="#f5f5f7")
+
+    # Canvas for rounded button
+    canvas = tk.Canvas(button_frame, width=150, height=40,
+                       bg="#f5f5f7", highlightthickness=0)
+    canvas.pack()
+
+    # Create rounded rectangle
+    radius = 10
+    button = canvas.create_rounded_rect(0, 0, 150, 40, radius, fill=bg_color)
+    button_text = canvas.create_text(75, 20, text=text, fill="white",
+                                     font=("Segoe UI", 11, "bold"))
+
+    # Bind events
+    def on_enter(e):
+        canvas.itemconfig(button, fill=hover_color)
+
+    def on_leave(e):
+        canvas.itemconfig(button, fill=bg_color)
+
+    def on_click(e):
+        canvas.itemconfig(button, fill=hover_color)
+        command()
+
+    canvas.tag_bind(button, "<Enter>", on_enter)
+    canvas.tag_bind(button, "<Leave>", on_leave)
+    canvas.tag_bind(button, "<Button-1>", on_click)
+    canvas.tag_bind(button_text, "<Enter>", on_enter)
+    canvas.tag_bind(button_text, "<Leave>", on_leave)
+    canvas.tag_bind(button_text, "<Button-1>", on_click)
+
+    return button_frame
+
+
+# Add the rounded rectangle method to the Canvas class
+tk.Canvas.create_rounded_rect = lambda self, x1, y1, x2, y2, radius, **kwargs: self.create_polygon(
+    x1 + radius, y1,
+    x2 - radius, y1,
+    x2, y1,
+    x2, y1 + radius,
+    x2, y2 - radius,
+    x2, y2,
+    x2 - radius, y2,
+    x1 + radius, y2,
+    x1, y2,
+    x1, y2 - radius,
+    x1, y1 + radius,
+    x1, y1,
+    smooth=True, **kwargs)
+
+
+# Standard button (fallback if the rounded corners don't work)
+def create_button(parent, text, command, primary=True):
+    if primary:
+        bg_color = "#1a73e8"  # Google blue
+        hover_color = "#0d62cb"
+    else:
+        bg_color = "#f44336"  # Material red
+        hover_color = "#d32f2f"
+
     button = tk.Button(
         parent,
         text=text,
         command=command,
         bg=bg_color,
         fg="white",
-        font=("Arial", 11, "bold"),
+        font=("Segoe UI", 11, "bold"),
         relief="flat",
         padx=20,
         pady=8,
-        activebackground="#2a6dd7",
+        activebackground=hover_color,
         activeforeground="white",
-        bd=0
+        bd=0,
+        cursor="hand2"  # Hand cursor on hover
     )
     return button
 
@@ -172,6 +240,9 @@ def start_download():
     current_filename.set("Starting download...")
     download_speed.set("Connecting...")
     estimated_time.set("Calculating...")
+
+    # Clear entry field for next use
+    entry.delete(0, tk.END)
 
     # Start progress animation
     start_progress_animation()
@@ -240,9 +311,6 @@ def download_mp3(url):
             download_speed.set("")
             estimated_time.set("")
 
-            # Debug message to console (won't be visible to users)
-            print("Download complete, button should be visible now")
-
         # Schedule UI updates on the main thread
         root.after(0, complete_download)
 
@@ -269,57 +337,75 @@ def download_mp3(url):
 
 
 # Create gradient title
-title_frame = tk.Frame(root, bg="#f0f0f0")
+title_frame = tk.Frame(root, bg="#f5f5f7")
 title_frame.pack(pady=10, fill="x")
 
-title_label = tk.Label(title_frame, text="YouTube to MP3 Downloader",
-                       font=("Arial", 16, "bold"),
-                       fg="#4287f5", bg="#f0f0f0")
-title_label.pack()
+# Add a subtle gradient effect to the title
+title_canvas = tk.Canvas(title_frame, width=500, height=40,
+                         bg="#f5f5f7", highlightthickness=0)
+title_canvas.pack()
 
-# URL entry section
-entry_frame = tk.Frame(root, bg="#f0f0f0")
+# Create gradient for title
+title_canvas.create_text(250, 20, text="YouTube to MP3 Downloader",
+                         font=("Segoe UI", 16, "bold"),
+                         fill="#1a73e8")  # Google blue
+
+# URL entry section with modern design
+entry_frame = tk.Frame(root, bg="#f5f5f7")
 entry_frame.pack(pady=5)
 
 entry_label = tk.Label(entry_frame, text="Paste YouTube link:",
-                       font=("Arial", 10),
-                       fg="#555", bg="#f0f0f0")
+                       font=("Segoe UI", 10),
+                       fg="#555", bg="#f5f5f7")
 entry_label.pack(anchor="w")
 
-entry = tk.Entry(entry_frame, width=60, font=("Arial", 10),
-                 bd=0, highlightthickness=1, highlightbackground="#ccc",
-                 bg="white", fg="black")
-entry.pack(pady=5, ipady=8)
+# Create a frame for the entry to add a subtle shadow effect
+entry_container = tk.Frame(entry_frame, bg="#ddd", padx=1, pady=1)
+entry_container.pack(pady=5)
 
-# Download folder section
-folder_frame = tk.Frame(root, bg="#f0f0f0")
+entry = tk.Entry(entry_container, width=60, font=("Segoe UI", 10),
+                 bd=0, highlightthickness=0,
+                 bg="white", fg="#202124")  # Google text color
+entry.pack(ipady=8, padx=1, pady=1)
+
+# Download folder section with modern style
+folder_frame = tk.Frame(root, bg="#f5f5f7")
 folder_frame.pack(pady=5)
 
 folder_button = tk.Button(folder_frame, text="Choose Download Folder",
                           command=choose_folder,
-                          bg="#e0e0e0", fg="#333",
+                          bg="#e8eaed", fg="#202124",  # Google gray
                           relief="flat", padx=10, pady=5,
-                          font=("Arial", 9))
+                          font=("Segoe UI", 9),
+                          cursor="hand2")
 folder_button.pack(pady=5)
 
 folder_label = tk.Label(folder_frame, text=f"Download folder: {download_path}",
-                        wraplength=500, font=("Arial", 9),
-                        fg="#555", bg="#f0f0f0")
+                        wraplength=500, font=("Segoe UI", 9),
+                        fg="#5f6368", bg="#f5f5f7")  # Google secondary text
 folder_label.pack(pady=3)
 
-# Create buttons container frame (helps with button management)
-buttons_frame = tk.Frame(root, bg="#f0f0f0")
+# Create buttons container frame
+buttons_frame = tk.Frame(root, bg="#f5f5f7")
 buttons_frame.pack(pady=10)
 
-# Create the buttons with simpler implementation
-download_btn = create_button(buttons_frame, "Download MP3", start_download, "#4287f5")
-download_btn.pack(pady=10)
+# Try to use modern rounded buttons, fallback to standard if error
+try:
+    download_btn = create_modern_button(buttons_frame, "Download MP3", start_download, True)
+    download_btn.pack(pady=10)
 
-cancel_btn = create_button(buttons_frame, "Cancel Download", cancel_download, "#e74c3c")
-cancel_btn.pack_forget()  # Initially hidden
+    cancel_btn = create_modern_button(buttons_frame, "Cancel Download", cancel_download, False)
+    cancel_btn.pack_forget()  # Initially hidden
+except Exception:
+    # Fallback to standard buttons
+    download_btn = create_button(buttons_frame, "Download MP3", start_download, True)
+    download_btn.pack(pady=10)
 
-# Progress section
-progress_frame = tk.Frame(root, bg="#f0f0f0")
+    cancel_btn = create_button(buttons_frame, "Cancel Download", cancel_download, False)
+    cancel_btn.pack_forget()  # Initially hidden
+
+# Progress section with modern design
+progress_frame = tk.Frame(root, bg="#f5f5f7")
 progress_frame.pack(pady=5, fill="x", padx=20)
 
 progress_bar = ttk.Progressbar(progress_frame, orient="horizontal",
@@ -329,34 +415,34 @@ progress_bar = ttk.Progressbar(progress_frame, orient="horizontal",
 progress_bar.pack(fill="x", pady=5)
 
 # Progress details
-progress_detail = tk.Label(progress_frame, text="", bg="#f0f0f0", fg="#4287f5",
-                           font=("Courier New", 12))
+progress_detail = tk.Label(progress_frame, text="", bg="#f5f5f7", fg="#1a73e8",
+                           font=("Consolas", 12))
 progress_detail.pack(pady=2)
 
-# Status information
-info_frame = tk.Frame(root, bg="#f0f0f0")
+# Status information with modern font
+info_frame = tk.Frame(root, bg="#f5f5f7")
 info_frame.pack(pady=5, fill="x")
 
 progress_label = tk.Label(info_frame, textvariable=current_filename,
-                          wraplength=500, font=("Arial", 10),
-                          fg="#333", bg="#f0f0f0")
+                          wraplength=500, font=("Segoe UI", 10),
+                          fg="#202124", bg="#f5f5f7")
 progress_label.pack(pady=2)
 
-# Download stats (speed and ETA)
-stats_frame = tk.Frame(root, bg="#f0f0f0")
+# Download stats with modern look
+stats_frame = tk.Frame(root, bg="#f5f5f7")
 stats_frame.pack(pady=0, fill="x")
 
 speed_label = tk.Label(stats_frame, textvariable=download_speed,
-                       font=("Arial", 9), fg="#555", bg="#f0f0f0")
+                       font=("Segoe UI", 9), fg="#5f6368", bg="#f5f5f7")
 speed_label.pack(side="left", padx=25)
 
 eta_label = tk.Label(stats_frame, textvariable=estimated_time,
-                     font=("Arial", 9), fg="#555", bg="#f0f0f0")
+                     font=("Segoe UI", 9), fg="#5f6368", bg="#f5f5f7")
 eta_label.pack(side="right", padx=25)
 
-# Add a footer
+# Add a footer with subtle styling
 footer = tk.Label(root, text="Made with ❤️ using Python",
-                  font=("Arial", 8), fg="#888", bg="#f0f0f0")
+                  font=("Segoe UI", 8), fg="#5f6368", bg="#f5f5f7")
 footer.pack(side="bottom", pady=5)
 
 root.mainloop()
